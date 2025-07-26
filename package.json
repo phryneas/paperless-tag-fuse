@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "fuse.js",
   "scripts": {
+    "build": "true",
     "start": "dotenvx run -f .env.local -f .env -- node index.js",
     "check": "tsc"
   },
