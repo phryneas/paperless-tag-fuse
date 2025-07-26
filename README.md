@@ -1,6 +1,6 @@
 (This is just something that I was fiddling around with on the weekend and it's far from finished)
 
-A FUSE file system to browse documents by tags.
+A FUSE file system to browse documents by paperless tags.
 
 Assuming you mount this on /your/mountpoint, then:
 
