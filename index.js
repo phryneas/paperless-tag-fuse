@@ -4,6 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { API } from './api.js'
 import { startFs } from './fuse.js'
 import { existsSync } from 'node:fs'
+import { join } from 'node:path';
 
 import dotenvx from "@dotenvx/dotenvx";
 dotenvx.config({ path: ['.env.local', '.env'] });
@@ -25,7 +26,7 @@ startFs(process.env.TARGET_DIR, tags, documents.map(
         return ({
             ...document,
             fileName: document.archived_file_name || document.media_filename,
-            realPath: '/tmp/' + document.media_filename,
+            realPath: join(process.env.MEDIA_ARCHIVE_ROOT, document.media_filename),
             created: new Date(document.created),
             added: new Date(document.added)
         })
