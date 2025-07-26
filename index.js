@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { readFile, writeFile } from 'node:fs/promises'
-import { getAllData } from './api.js'
+import { API } from './api.js'
 import { startFs } from './fuse.js'
 import { existsSync } from 'node:fs'
 
@@ -10,13 +10,14 @@ dotenvx.config({ path: ['.env.local', '.env'] });
 
 const cache = process.env.CACHE_FILE
 if (!existsSync(cache)) {
+    const api = new API(process.env.BASE_URL, process.env.TOKEN)
     const {
         documents,
         tags
-    } = await getAllData(process.env.BASE_URL, process.env.TOKEN)
+    } = await api.getAllData()
     await writeFile(cache, JSON.stringify({ documents, tags }, null, 2), "utf-8")
 }
-const { documents, tags } = /** @type {Awaited<ReturnType<getAllData>>} */ (JSON.parse(await readFile(cache, "utf-8")))
+const { documents, tags } = /** @type {Awaited<ReturnType<API['getAllData']>>} */ (JSON.parse(await readFile(cache, "utf-8")))
 
 
 startFs(process.env.TARGET_DIR, tags, documents.map(

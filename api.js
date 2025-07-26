@@ -1,11 +1,53 @@
 import { Agent } from 'undici';
 
-export async function getAllData(
-  /** @type {string} */ base,
-  /** @type {string} */ token
-) {
+/**
+ * @typedef {{
+ * id: number
+ * slug: string
+ * name: string
+ * }} Tag
+ */
 
-  async function json(url, options = {}) {
+/** 
+ * @typedef {{
+ * id: number
+ * tags: number[]
+ * archived_file_name: string
+ * created: string
+ * modified: string
+ * added: string
+ * }} ApiDocument 
+ */
+
+/** 
+ * @typedef  {{
+ * media_filename: string
+ * original_filename: string
+ * }} ApiDocumentMetadata
+ */
+
+export class API {
+  /** @type {string} */
+  base
+  /** @type {string} */
+  token
+
+  constructor(
+    /** @type {string} */
+    base,
+    /** @type {string} */
+    token
+  ) {
+    this.base = base
+    this.token = token
+  }
+
+  async json(
+    /** @type {string} */
+    url,
+    /** @type {RequestInit} */
+    options = {}
+  ) {
     /** @type {RequestInit} */
     const requestOptions = { ...options }
     if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0') {
@@ -17,12 +59,23 @@ export async function getAllData(
       });
     }
     const headers = new Headers(options.headers)
-    headers.set("Authorization", `Token ${token}`)
+    headers.set("Authorization", `Token ${this.token}`)
     requestOptions.headers = headers
 
     try {
-      console.log(`${base}/api/${url}`)
-      const result = await (fetch(`${base}/api/${url}`, requestOptions))
+      if (url.includes('://')) {
+        // absolute url returned by paperless might not always have the right base. Correct to the same as `this.base`
+        const parsed = new URL(url)
+        const parsedBase = new URL(this.base)
+        parsed.host = parsedBase.host
+        parsed.protocol = parsedBase.protocol
+        url = parsed.toString()
+      }
+      else {
+        url = `${this.base}/api/${url}`
+      }
+      console.log(url)
+      const result = await (fetch(url, requestOptions))
       if (!result.ok) {
         throw new Error(result.statusText)
       }
@@ -34,53 +87,55 @@ export async function getAllData(
     }
   }
 
-  /**
-   * @typedef {object} Tag
-   * @property {number} id
-   * @property {string} slug
-   * @property {string} name
-   */
+  async getAllFromApi(
+    /** @type {string} */
+    url
+  ) {
+    const results = []
+    let next = url;
+    while (next) {
+      const response = await this.json(next);
+      next = response.next
+      results.push(...response.results)
+    }
+    return results;
+  }
 
-  /** @type {Array<Tag>} */
-  const tags = (await json(`tags/?page_size=1000`)).results
+  /** @returns {Promise<Array<Tag>>} */
+  getTags() {
+    return this.getAllFromApi('tags/')
+  }
 
+  /** @returns {Promise<Array<ApiDocument>>} */
+  getDocuments() {
+    return this.getAllFromApi('documents/')
+  }
 
-  async function getDocumentInfo(/** @type {string} */ id) {
-    /** @type {{
-     * id: number
-     * tags: number[]
-     * archived_file_name: string
-     * created: string
-     * modified: string
-     * added: string
-     * }} */
-    const document = await json(`documents/${id}/`);
-    const {
-      tags, added, archived_file_name, created, modified
-    } = document
+  /** @returns {Promise<ApiDocument>} */
+  getDocumentInfo(/** @type {string|number} */ id) {
+    return this.json(`documents/${id}/`);
+  }
 
-    /** @type {{
-     * media_filename: string
-     * original_filename: string
-     * }} */
-    const metadata = await json(`documents/${id}/metadata/`);
-    const {
-      media_filename,
-      original_filename
-    } = metadata
+  /** @returns {Promise<ApiDocumentMetadata>} */
+  getDocumentMetadata(/** @type {string|number} */ id) {
+    return this.json(`documents/${id}/metadata/`);
+  }
+
+  async getAllData() {
+    const tags = await this.getTags()
+    const partialDocuments = await this.getDocuments();
+    /** @type {Array<Omit<ApiDocument & ApiDocumentMetadata, 'id'> & {id:string}>} */
+    const documents = []
+    for (const document of partialDocuments) {
+      documents.push({
+        ...document,
+        ...(await this.getDocumentMetadata(document.id)),
+        id: "" + document.id
+      })
+    }
 
     return {
-      id, archived_file_name, media_filename, original_filename, tags, added, created, modified
+      documents, tags
     }
-  }
-
-  const documents = []
-  const allDocs = await json("documents/")
-  for (const id of allDocs.all) {
-    documents.push(await getDocumentInfo(id))
-  }
-
-  return {
-    documents, tags
   }
 }
