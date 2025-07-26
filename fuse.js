@@ -144,8 +144,9 @@ export function startFs(
 
     const fuse = new Fuse(target, ops, {
         debug: process.env.FUSE_DEBUG === "true",
-        force: process.env.FORCE_MOUNT === "true",
-        mkdir: process.env.CREATE_TARGET_DIR === "true"
+        force: process.env.FUSE_FORCE === "true",
+        mkdir: process.env.FUSE_MKDIR === "true",
+        allowOther: process.env.FUSE_ALLOW_OTHER === "true",
     });
     fuse.mount((err) => {
         if (err) throw err;
