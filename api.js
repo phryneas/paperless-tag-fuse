@@ -103,22 +103,22 @@ export class API {
 
   /** @returns {Promise<Array<Tag>>} */
   getTags() {
-    return this.getAllFromApi('tags/')
+    return this.getAllFromApi('tags/').then(tags => tags.map(pick('id', 'slug', 'name')))
   }
 
   /** @returns {Promise<Array<ApiDocument>>} */
   getDocuments() {
-    return this.getAllFromApi('documents/')
+    return this.getAllFromApi('documents/').then(tags => tags.map(pick("id", "tags", "archived_file_name", "created", "modified", "added")))
   }
 
   /** @returns {Promise<ApiDocument>} */
   getDocumentInfo(/** @type {string|number} */ id) {
-    return this.json(`documents/${id}/`);
+    return this.json(`documents/${id}/`).then(pick("id", "tags", "archived_file_name", "created", "modified", "added"));
   }
 
   /** @returns {Promise<ApiDocumentMetadata>} */
   getDocumentMetadata(/** @type {string|number} */ id) {
-    return this.json(`documents/${id}/metadata/`);
+    return this.json(`documents/${id}/metadata/`).then(pick('media_filename', 'original_filename'));
   }
 
   async getAllData() {
@@ -138,4 +138,11 @@ export class API {
       documents, tags
     }
   }
+}
+
+/**
+ * @type {<T extends string>(...args: T[]) => (<O extends Record<T, any>>(obj: O) => Pick<O, T>)}
+ */
+function pick(...keys) {
+  return obj => /** @type {any} */(keys.reduce((acc, /** @type {any} */key) => { acc[key] = obj[key]; return acc }, {}))
 }
