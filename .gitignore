@@ -1,0 +1,5 @@
+mnt/
+node_modules/
+.env.local
+.env.keys
+.cache.json

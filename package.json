@@ -1,0 +1,23 @@
+{
+  "name": "paperless-tag-fuse",
+  "version": "1.0.0",
+  "main": "fuse.js",
+  "scripts": {
+    "start": "dotenvx run -f .env.local -f .env -- node index.js",
+    "check": "tsc"
+  },
+  "type": "module",
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@cocalc/fuse-native": "^2.4.3",
+    "@dotenvx/dotenvx": "^1.48.3",
+    "undici": "^7.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.1.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.8.3"
+  }
+}
