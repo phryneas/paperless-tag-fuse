@@ -1,9 +1,14 @@
+#!/usr/bin/env node
+
 import { readFile, writeFile } from 'node:fs/promises'
 import { getAllData } from './api.js'
 import { startFs } from './fuse.js'
 import { existsSync } from 'node:fs'
 
-const cache = '.cache.json'
+import dotenvx from "@dotenvx/dotenvx";
+dotenvx.config({ path: ['.env.local', '.env'] });
+
+const cache = process.env.CACHE_FILE
 if (!existsSync(cache)) {
     const {
         documents,
