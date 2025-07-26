@@ -1,8 +1,10 @@
 { nixpkgs ? import <nixpkgs> {  } }:
 with nixpkgs;
+let pkgJson = lib.importJSON ./package.json;
+in
 buildNpmPackage rec {
-  pname = "paperless-tag-fuse";
-  version = "0.0.1";
+  pname = pkgJson.name;
+  version = pkgJson.version;
   src = ./.;
   npmDepsHash = "sha256-54goABzLemtWY3ypud483IySrLvVOB8XH1B05ylJHUQ=";
 
