@@ -69,14 +69,12 @@ export class API extends /** @type {typeof EventEmitter<EventMap>} */(EventEmitt
    * @template T
    * @param {string} url 
    * @param {(allIds: number[]) => void} [onAll]
-   * @param {(results: T[]) => void} [onResults]
    * 
    * @returns {Promise<T[]>}
    */
   async getAllFromApi(
     url,
     onAll,
-    onResults
   ) {
     const results = []
     let next = url;
@@ -84,7 +82,6 @@ export class API extends /** @type {typeof EventEmitter<EventMap>} */(EventEmitt
       const response = await this.json(next);
       next = response.next
       onAll?.(response.all)
-      onResults?.(response.results)
       results.push(...response.results)
     }
     return results
