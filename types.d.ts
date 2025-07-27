@@ -15,6 +15,7 @@ export interface ApiDocument {
 
 export interface ApiDocumentMetadata {
   archive_media_filename: string;
+  has_archive_version: boolean;
   original_filename: string;
   media_filename: string;
 }

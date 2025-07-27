@@ -92,6 +92,7 @@ export class TagFs {
                         archived_file_name,
                         created,
                         archive_media_filename,
+                        has_archive_version,
                         modified,
                         original_filename,
                         media_filename,
@@ -99,12 +100,22 @@ export class TagFs {
                     } = document
                     const fileName = archived_file_name || archive_media_filename || media_filename
                     const parsed = parse(fileName);
-                    assert(process.env.MEDIA_ARCHIVE_ROOT)
+                    assert(process.env.PAPERLESS_MEDIA_ROOT)
                     this.addFile({
                         id: "" + id,
                         fileName,
-                        // TODO: clean this up
-                        realPath: archive_media_filename ? join(process.env.MEDIA_ARCHIVE_ROOT, archive_media_filename) : join(process.env.MEDIA_ARCHIVE_ROOT, '..', 'originals', media_filename),
+                        realPath: has_archive_version ?
+                            join(
+                                process.env.PAPERLESS_MEDIA_ROOT,
+                                'documents',
+                                'archive',
+                                archive_media_filename
+                            ) : join(
+                                process.env.PAPERLESS_MEDIA_ROOT,
+                                'documents',
+                                'originals',
+                                media_filename
+                            ),
                         created: new Date(created),
                         added: new Date(added),
                         tags,

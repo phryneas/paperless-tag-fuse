@@ -156,4 +156,4 @@ function pick(...keys) {
 
 const pickTag = pick('id', 'slug', 'name')
 const pickDocument = pick("id", "tags", "archived_file_name", "created", "modified", "added")
-const pickDocumentMetadata = pick('archive_media_filename', 'media_filename', 'original_filename')
+const pickDocumentMetadata = pick('archive_media_filename', 'media_filename', 'has_archive_version', 'original_filename')
