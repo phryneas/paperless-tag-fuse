@@ -88,11 +88,13 @@ export class API extends /** @type {typeof EventEmitter<EventMap>} */(EventEmitt
   }
 
   /** @returns {Promise<Array<Tag>>} */
-  getTags() {
-    return this.getAllFromApi(
+  async getTags() {
+    const tags = await this.getAllFromApi(
       'tags/',
       allIds => this.emit('updated_all_tag_ids', allIds)
     ).then(tags => tags.map(pickTag))
+    this.emit('added_tags', tags)
+    return tags;
   }
 
   /** @returns {Promise<Array<ApiDocument>>} */
@@ -103,6 +105,13 @@ export class API extends /** @type {typeof EventEmitter<EventMap>} */(EventEmitt
     ).then(documents => documents.map(pickDocument))
   }
 
+  /** @returns {Promise<number[]>} */
+  async getAllDocumentIds() {
+    const result = await this.json('documents/?page_size=1')
+    this.emit('updated_all_document_ids', result.all)
+    return result.all
+  }
+
   /** @returns {Promise<ApiDocument>} */
   getDocumentInfo(/** @type {string|number} */ id) {
     return this.json(`documents/${id}/`).then(pickDocument);
@@ -110,7 +119,7 @@ export class API extends /** @type {typeof EventEmitter<EventMap>} */(EventEmitt
 
   /** @returns {Promise<ApiDocumentMetadata>} */
   getDocumentMetadata(/** @type {string|number} */ id) {
-    return this.json(`documents/${id}/metadata/`).then(pick('media_filename', 'original_filename'));
+    return this.json(`documents/${id}/metadata/`).then(pickDocumentMetadata);
   }
 
   /** @returns {Promise<Document>} */
@@ -120,10 +129,7 @@ export class API extends /** @type {typeof EventEmitter<EventMap>} */(EventEmitt
     return document
   }
 
-  async getAllData() {
-    const tags = await this.getTags()
-    this.emit('added_tags', tags)
-
+  async getDocucments() {
     const partialDocuments = await this.getDocumentInfos();
     /** @type {Document[]} */
     const documents = []
@@ -136,9 +142,7 @@ export class API extends /** @type {typeof EventEmitter<EventMap>} */(EventEmitt
       documents.push(document)
     }
 
-    return {
-      documents, tags
-    }
+    return documents
   }
 }
 
@@ -152,3 +156,4 @@ function pick(...keys) {
 
 const pickTag = pick('id', 'slug', 'name')
 const pickDocument = pick("id", "tags", "archived_file_name", "created", "modified", "added")
+const pickDocumentMetadata = pick('archive_media_filename', 'media_filename', 'original_filename')

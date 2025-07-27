@@ -14,8 +14,9 @@ export interface ApiDocument {
 }
 
 export interface ApiDocumentMetadata {
-  media_filename: string;
+  archive_media_filename: string;
   original_filename: string;
+  media_filename: string;
 }
 
 export interface Document extends ApiDocument, ApiDocumentMetadata {}

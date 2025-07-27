@@ -85,31 +85,37 @@ export class TagFs {
     ) {
         events.on('added_documents', documents => {
             for (const document of documents) {
-                const {
-                    id,
-                    added,
-                    archived_file_name,
-                    created,
-                    media_filename,
-                    modified,
-                    original_filename,
-                    tags
-                } = document
-                const fileName = archived_file_name || media_filename
-                const parsed = parse(fileName);
-                assert(process.env.MEDIA_ARCHIVE_ROOT)
-                this.addFile({
-                    id: "" + id,
-                    fileName,
-                    realPath: join(process.env.MEDIA_ARCHIVE_ROOT, document.media_filename),
-                    created: new Date(created),
-                    added: new Date(added),
-                    tags,
-                    displayName: format({
-                        name: `${parsed.name}.${id}`,
-                        ext: parsed.ext,
-                    }),
-                });
+                try {
+                    const {
+                        id,
+                        added,
+                        archived_file_name,
+                        created,
+                        archive_media_filename,
+                        modified,
+                        original_filename,
+                        media_filename,
+                        tags
+                    } = document
+                    const fileName = archived_file_name || archive_media_filename || media_filename
+                    const parsed = parse(fileName);
+                    assert(process.env.MEDIA_ARCHIVE_ROOT)
+                    this.addFile({
+                        id: "" + id,
+                        fileName,
+                        // TODO: clean this up
+                        realPath: archive_media_filename ? join(process.env.MEDIA_ARCHIVE_ROOT, archive_media_filename) : join(process.env.MEDIA_ARCHIVE_ROOT, '..', 'originals', media_filename),
+                        created: new Date(created),
+                        added: new Date(added),
+                        tags,
+                        displayName: format({
+                            name: `${parsed.name}.${id}`,
+                            ext: parsed.ext,
+                        }),
+                    });
+                } catch (e) {
+                    console.warn(`Error occured handling document ${document?.id} - skipping`, document)
+                }
             }
         })
         events.on('added_tags', tags => {
