@@ -1,32 +1,10 @@
+import EventEmitter from 'node:events';
 import { Agent } from 'undici';
-
-/**
- * @typedef {{
- * id: number
- * slug: string
- * name: string
- * }} Tag
- */
-
 /** 
- * @typedef {{
- * id: number
- * tags: number[]
- * archived_file_name: string
- * created: string
- * modified: string
- * added: string
- * }} ApiDocument 
+ * @import { ApiDocument,ApiDocumentMetadata,Document,EventMap,Tag } from "./types" 
  */
 
-/** 
- * @typedef  {{
- * media_filename: string
- * original_filename: string
- * }} ApiDocumentMetadata
- */
-
-export class API {
+export class API extends /** @type {typeof EventEmitter<EventMap>} */(EventEmitter) {
   /** @type {string} */
   base
   /** @type {string} */
@@ -38,6 +16,7 @@ export class API {
     /** @type {string} */
     token
   ) {
+    super()
     this.base = base
     this.token = token
   }
@@ -74,7 +53,6 @@ export class API {
       else {
         url = `${this.base}/api/${url}`
       }
-      console.log(url)
       const result = await (fetch(url, requestOptions))
       if (!result.ok) {
         throw new Error(result.statusText)
@@ -87,33 +65,50 @@ export class API {
     }
   }
 
+  /**
+   * @template T
+   * @param {string} url 
+   * @param {(allIds: number[]) => void} [onAll]
+   * @param {(results: T[]) => void} [onResults]
+   * 
+   * @returns {Promise<T[]>}
+   */
   async getAllFromApi(
-    /** @type {string} */
-    url
+    url,
+    onAll,
+    onResults
   ) {
     const results = []
     let next = url;
     while (next) {
       const response = await this.json(next);
       next = response.next
+      onAll?.(response.all)
+      onResults?.(response.results)
       results.push(...response.results)
     }
-    return results;
+    return results
   }
 
   /** @returns {Promise<Array<Tag>>} */
   getTags() {
-    return this.getAllFromApi('tags/').then(tags => tags.map(pick('id', 'slug', 'name')))
+    return this.getAllFromApi(
+      'tags/',
+      allIds => this.emit('updated_all_tag_ids', allIds)
+    ).then(tags => tags.map(pickTag))
   }
 
   /** @returns {Promise<Array<ApiDocument>>} */
-  getDocuments() {
-    return this.getAllFromApi('documents/').then(tags => tags.map(pick("id", "tags", "archived_file_name", "created", "modified", "added")))
+  getDocumentInfos() {
+    return this.getAllFromApi(
+      'documents/',
+      allIds => this.emit('updated_all_document_ids', allIds)
+    ).then(documents => documents.map(pickDocument))
   }
 
   /** @returns {Promise<ApiDocument>} */
   getDocumentInfo(/** @type {string|number} */ id) {
-    return this.json(`documents/${id}/`).then(pick("id", "tags", "archived_file_name", "created", "modified", "added"));
+    return this.json(`documents/${id}/`).then(pickDocument);
   }
 
   /** @returns {Promise<ApiDocumentMetadata>} */
@@ -121,17 +116,27 @@ export class API {
     return this.json(`documents/${id}/metadata/`).then(pick('media_filename', 'original_filename'));
   }
 
+  /** @returns {Promise<Document>} */
+  async getDocument(/** @type {string|number} */ id) {
+    const document = Object.assign({}, ...await Promise.all([this.getDocumentInfo(id), this.getDocumentMetadata(id)]))
+    this.emit('added_documents', [document])
+    return document
+  }
+
   async getAllData() {
     const tags = await this.getTags()
-    const partialDocuments = await this.getDocuments();
-    /** @type {Array<Omit<ApiDocument & ApiDocumentMetadata, 'id'> & {id:string}>} */
+    this.emit('added_tags', tags)
+
+    const partialDocuments = await this.getDocumentInfos();
+    /** @type {Document[]} */
     const documents = []
-    for (const document of partialDocuments) {
-      documents.push({
-        ...document,
-        ...(await this.getDocumentMetadata(document.id)),
-        id: "" + document.id
-      })
+    for (const apiDocument of partialDocuments) {
+      const document = {
+        ...apiDocument,
+        ...(await this.getDocumentMetadata(apiDocument.id))
+      }
+      this.emit('added_documents', [document])
+      documents.push(document)
     }
 
     return {
@@ -144,5 +149,9 @@ export class API {
  * @type {<T extends string>(...args: T[]) => (<O extends Record<T, any>>(obj: O) => Pick<O, T>)}
  */
 function pick(...keys) {
-  return obj => /** @type {any} */(keys.reduce((acc, /** @type {any} */key) => { acc[key] = obj[key]; return acc }, {}))
+  // @ts-ignore
+  return obj => (keys.reduce((acc, key) => { acc[key] = obj[key]; return acc }, {}))
 }
+
+const pickTag = pick('id', 'slug', 'name')
+const pickDocument = pick("id", "tags", "archived_file_name", "created", "modified", "added")

@@ -1,165 +1,232 @@
 
 import Fuse from "@cocalc/fuse-native";
-import { format, parse, sep } from "node:path";
+import { format, join, parse, sep } from "node:path";
 import { constants } from "node:fs";
-
+import assert from "node:assert";
 /**
- * @typedef {{
- *   id: number
- *   name: string
- *   [key: string]: unknown
- * }} Tag
+ * @import {EventEmitter} from 'node:events'
+ * @import {EventMap, Tag, Document, File } from './types'
  */
 
-/**
- * @typedef {{
- *   id: string
- *   fileName: string
- *   realPath: string
- *   created: Date
- *   added: Date
- *   tags: number[]
- * }} File
- */
+const date = new Date();
 
-/**
- * @typedef {File & {
- *   displayName: string
- * }} FileWithDisplayName
- */
+/** @typedef {Omit<Fuse.Stats, "dev"|"ino"|"rdev"|"blksize"|"blocks">} FStats */
 
-export function startFs(
-  /** @type {string} */ target,
-  /** @type {Tag[]} */ tags,
-  /** @type {File[]} */ files
-) {
-    /** @type {Map<string, FileWithDisplayName>} */
-    const fileByDisplayName = new Map();
-    /** @type {Map<string, FileWithDisplayName>} */
-    const fileById = new Map();
-    /** @type {Map<string, Set<FileWithDisplayName>>} */
-    const filesByTagName = new Map();
-    /** @type {Set<FileWithDisplayName>} */
-    const allFiles = new Set()
+/** @type {FStats} */
+const DIR = {
+    mtime: date,
+    atime: date,
+    ctime: date,
+    nlink: 1,
+    size: 12,
+    mode: constants.S_IFDIR | 0o555,
+    uid: 0,
+    gid: 0,
+};
+/** @type {FStats} */
+const SYMLINK = {
+    mtime: date,
+    atime: date,
+    ctime: date,
+    nlink: 1,
+    size: 12,
+    mode: constants.S_IFLNK | 0o444,
+    uid: 0,
+    gid: 0,
+};
 
-    const tagsByName = new Map(Object.values(tags).map((tag) => [tag.name, tag]));
-    const tagNames = new Set(tagsByName.keys())
-    const tagsById = new Map(Object.values(tags).map((tag) => [tag.id, tag]));
+/** @implements {Fuse.OPERATIONS} */
+export class TagFs {
+    /** @type {Map<File['displayName'], File>} */
+    fileByDisplayName = new Map();
+    /** @type {Map<File['id'], File>} */
+    fileById = new Map();
+    /** @type {Map<Tag['name'], Set<File>>} */
+    filesByTagName = new Map();
+    /** @type {Set<File>} */
+    allFiles = new Set()
 
-    for (const _file of files) {
-        const parsed = parse(_file.fileName);
-        /** @type {FileWithDisplayName} */
-        const file = {
-            ..._file,
-            displayName: format({
-                name: `${parsed.name}.${_file.id}`,
-                ext: parsed.ext,
-            }),
-        };
-        fileByDisplayName.set(file.displayName, file);
-        fileById.set(file.id, file);
-        allFiles.add(file)
+    /** @type {Map<Tag['name'], Tag>} */
+    tagsByName = new Map();
+    /** @type {Set<string>} */
+    tagNames = new Set()
+    /** @type {Map<Tag['id'], Tag>} > */
+    tagsById = new Map();
+
+    debug = process.env.DEBUG_TAGFS === 'true' ? console.log : () => { }
+
+    mount(
+    /** @type {string} */ target,
+    ) {
+        const fuse = new Fuse(target, this, {
+            debug: process.env.FUSE_DEBUG === "true",
+            force: process.env.FUSE_FORCE === "true",
+            mkdir: process.env.FUSE_MKDIR === "true",
+            allowOther: process.env.FUSE_ALLOW_OTHER === "true",
+        });
+        fuse.mount((err) => {
+            if (err) throw err;
+            console.log("filesystem mounted on " + fuse.mnt);
+        });
+
+        process.once("SIGINT", function () {
+            fuse.unmount((err) => {
+                if (err) {
+                    console.log("filesystem at " + fuse.mnt + " not unmounted", err);
+                } else {
+                    console.log("filesystem at " + fuse.mnt + " unmounted");
+                }
+            });
+        });
+    }
+
+    startListening(
+      /** @type {EventEmitter<EventMap>} */ events,
+    ) {
+        events.on('added_documents', documents => {
+            for (const document of documents) {
+                const {
+                    id,
+                    added,
+                    archived_file_name,
+                    created,
+                    media_filename,
+                    modified,
+                    original_filename,
+                    tags
+                } = document
+                const fileName = archived_file_name || media_filename
+                const parsed = parse(fileName);
+                assert(process.env.MEDIA_ARCHIVE_ROOT)
+                this.addFile({
+                    id: "" + id,
+                    fileName,
+                    realPath: join(process.env.MEDIA_ARCHIVE_ROOT, document.media_filename),
+                    created: new Date(created),
+                    added: new Date(added),
+                    tags,
+                    displayName: format({
+                        name: `${parsed.name}.${id}`,
+                        ext: parsed.ext,
+                    }),
+                });
+            }
+        })
+        events.on('added_tags', tags => {
+            for (const tag of tags) {
+                this.addTag(tag)
+            }
+        })
+        events.on('updated_all_document_ids', (documentIds) => {
+            const removed = new Set(this.fileById.keys()).difference(new Set(documentIds.map(id => "" + id)))
+            for (const id of removed) {
+                this.removeFile(id)
+            }
+        })
+        events.on('updated_all_tag_ids', (tagIds) => {
+            const removed = new Set(this.tagsById.keys()).difference(new Set(tagIds))
+            for (const id of removed) {
+                this.removeTag(id)
+            }
+        })
+    }
+
+    addTag(/** @type {Tag} */ tag) {
+        this.debug('adding tag', tag)
+        this.tagsByName.set(tag.name, tag)
+        this.tagsById.set(tag.id, tag)
+        this.tagNames.add(tag.name)
+    }
+
+    removeTag(/** @type {number} */id) {
+        const tag = this.tagsById.get(id)
+        if (tag) {
+            this.debug('removing tag', tag)
+            this.tagsByName.delete(tag.name)
+            this.tagsById.delete(tag.id)
+            this.tagNames.delete(tag.name)
+        }
+    }
+
+    addFile(/** @type {File} */file) {
+        this.debug('adding file', file)
+        this.fileByDisplayName.set(file.displayName, file);
+        this.fileById.set(file.id, file);
+        this.allFiles.add(file)
         for (const tag of file.tags) {
-            const tagName = tagsById.get(tag)?.name
-            const byTag = filesByTagName.get(tagName) || new Set();
-            filesByTagName.set(tagName, byTag);
+            const tagName = this.tagsById.get(tag)?.name
+            assert(tagName)
+            const byTag = this.filesByTagName.get(tagName) || new Set();
+            this.filesByTagName.set(tagName, byTag);
             byTag.add(file);
         }
     }
 
-    const date = new Date();
+    removeFile(/** @type {string} */id) {
+        const file = this.fileById.get(id)
+        if (file) {
+            this.debug('removing file', file)
+            this.fileByDisplayName.delete(file.displayName);
+            this.fileById.delete(file.id);
+            this.allFiles.delete(file)
+            for (const tag of file.tags) {
+                const tagName = this.tagsById.get(tag)?.name
+                assert(tagName)
+                const byTag = this.filesByTagName.get(tagName)
+                if (byTag) {
+                    byTag.delete(file);
+                }
+            }
+        }
+    }
 
-    /** @typedef {Omit<Fuse.Stats, "dev"|"ino"|"rdev"|"blksize"|"blocks">} FStats */
 
-    /** @type {FStats} */
-    const DIR = {
-        mtime: date,
-        atime: date,
-        ctime: date,
-        nlink: 1,
-        size: 12,
-        mode: constants.S_IFDIR | 0o555,
-        uid: 0,
-        gid: 0,
-    };
-    /** @type {FStats} */
-    const SYMLINK = {
-        mtime: date,
-        atime: date,
-        ctime: date,
-        nlink: 1,
-        size: 12,
-        mode: constants.S_IFLNK | 0o444,
-        uid: 0,
-        gid: 0,
-    };
 
-    function filesIn(/** @type {Set<string>} */ tags) {
-        let files = allFiles;
+    filesIn(/** @type {Set<string>} */ tags) {
+        let files = this.allFiles;
         for (const tag of tags) {
-            const byTag = filesByTagName.get(tag)
+            const byTag = this.filesByTagName.get(tag)
             if (!byTag) return []
             files = files.intersection(byTag)
         }
         return files.values().map(file => file.displayName)
     }
 
-    /** @type {Fuse.OPERATIONS} */
-    const ops = {
-        readdir: function (path, cb) {
-            const tags = new Set(path.split(sep).filter((v) => !!v));
-            const unusedTags = tagNames.difference(tags);
-            return process.nextTick(cb, 0, [...unusedTags, ...filesIn(tags)]);
-        },
-        getattr: function (path, cb) {
-            const parsed = parse(path);
+    /** @type {Fuse.OPERATIONS['readdir']} */
+    readdir = (path, cb) => {
+        const tags = new Set(path.split(sep).filter((v) => !!v));
+        const unusedTags = this.tagNames.difference(tags);
+        return process.nextTick(cb, 0, [...unusedTags, ...this.filesIn(tags)]);
+    }
+    /** @type {Fuse.OPERATIONS['getattr']} */
+    getattr = (path, cb) => {
+        const parsed = parse(path);
 
-            if (path === "/" || (parsed.ext == "" && tagsByName.has(parsed.base))) {
-                return process.nextTick(cb, 0, DIR);
-            }
-            const file = fileByDisplayName.get(parsed.base)
-            if (file) {
-                return process.nextTick(
-                    cb,
-                    0,
-                    {
-                        ...SYMLINK,
-                        ctime: file.created,
-                        mtime: file.created,
-                        atime: file.added
-                    }
-                );
-            }
-            return process.nextTick(cb, Fuse.ENOENT);
-        },
-        readlink: function (path, cb) {
-            const parsed = parse(path);
-            const file = fileByDisplayName.get(parsed.base);
-            if (file) {
-                return process.nextTick(cb, 0, file.realPath);
-            }
-            return process.nextTick(cb, Fuse.ENOENT);
-        },
-    };
-
-    const fuse = new Fuse(target, ops, {
-        debug: process.env.FUSE_DEBUG === "true",
-        force: process.env.FUSE_FORCE === "true",
-        mkdir: process.env.FUSE_MKDIR === "true",
-        allowOther: process.env.FUSE_ALLOW_OTHER === "true",
-    });
-    fuse.mount((err) => {
-        if (err) throw err;
-        console.log("filesystem mounted on " + fuse.mnt);
-    });
-
-    process.once("SIGINT", function () {
-        fuse.unmount((err) => {
-            if (err) {
-                console.log("filesystem at " + fuse.mnt + " not unmounted", err);
-            } else {
-                console.log("filesystem at " + fuse.mnt + " unmounted");
-            }
-        });
-    });
-}
+        if (path === "/" || (parsed.ext == "" && this.tagsByName.has(parsed.base))) {
+            return process.nextTick(cb, 0, DIR);
+        }
+        const file = this.fileByDisplayName.get(parsed.base)
+        if (file) {
+            return process.nextTick(
+                cb,
+                0,
+                {
+                    ...SYMLINK,
+                    ctime: file.created,
+                    mtime: file.created,
+                    atime: file.added
+                }
+            );
+        }
+        return process.nextTick(cb, Fuse.ENOENT);
+    }
+    /** @type {Fuse.OPERATIONS['readlink']} */
+    readlink = (path, cb) => {
+        const parsed = parse(path);
+        const file = this.fileByDisplayName.get(parsed.base);
+        if (file) {
+            return process.nextTick(cb, 0, file.realPath);
+        }
+        return process.nextTick(cb, Fuse.ENOENT);
+    }
+};
