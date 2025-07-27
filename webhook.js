@@ -1,5 +1,6 @@
 import assert from 'node:assert';
-import http, { Server } from 'node:http'
+import http from 'node:http'
+import consumer from 'node:stream/consumers';
 import url from 'node:url'
 /**
  * @import {API} from './api'
@@ -12,16 +13,19 @@ export class Webhook {
         /** @type {API} */
         api
     ) {
-        this.server = http.createServer((req, res) => {
+        this.server = http.createServer(async (req, res) => {
             if (!req.url) return;
             const parsedUrl = url.parse(req.url, true);
 
             try {
                 switch (parsedUrl.pathname) {
                     case '/document/added':
-                    case '/document/modified':
-                        assert(typeof parsedUrl.query.id === "string")
-                        return api.getDocument(parsedUrl.query.id).then(ok)
+                    case '/document/updated':
+                        // assuming a webhook body of `{doc_url}`
+                        const body = await consumer.text(req)
+                        const match = body.match(/.*documents\/(\d*)\//)
+                        assert(match?.[1])
+                        return api.getDocument(match[1]).then(ok)
                     case '/document/deleted':
                         return api.getAllDocumentIds().then(ok)
                     case '/tag/added':
