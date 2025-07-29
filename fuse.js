@@ -3,6 +3,7 @@ import Fuse from "@cocalc/fuse-native";
 import { format, join, parse, sep } from "node:path";
 import { constants } from "node:fs";
 import assert from "node:assert";
+import { MemoizedSet } from "./MemoizedSet";
 /**
  * @import {EventEmitter} from 'node:events'
  * @import {EventMap, Tag, Document, File } from './types'
@@ -41,10 +42,10 @@ export class TagFs {
     fileByDisplayName = new Map();
     /** @type {Map<File['id'], File>} */
     fileById = new Map();
-    /** @type {Map<Tag['name'], Set<File>>} */
+    /** @type {Map<Tag['name'], MemoizedSet<File>>} */
     filesByTagName = new Map();
     /** @type {Set<File>} */
-    allFiles = new Set()
+    allFiles = new MemoizedSet()
 
     /** @type {Map<Tag['name'], Tag>} */
     tagsByName = new Map();
@@ -175,7 +176,7 @@ export class TagFs {
         for (const tag of file.tags) {
             const tagName = this.tagsById.get(tag)?.name
             assert(tagName)
-            const byTag = this.filesByTagName.get(tagName) || new Set();
+            const byTag = this.filesByTagName.get(tagName) || new MemoizedSet();
             this.filesByTagName.set(tagName, byTag);
             byTag.add(file);
         }

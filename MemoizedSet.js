@@ -35,7 +35,12 @@ export class MemoizedSet extends Set {
             other[intersectionCache] ??= new WeakMap()
             let cached = this[intersectionCache].get(other[memoizaionIdentifier])
             if (!cached) {
-                cached = new MemoizedSet(super.intersection(other))
+                cached = new ReadonlyMemoizedSet(super.intersection(other))
+                if (this.size === cached.size && this instanceof ReadonlyMemoizedSet) {
+                    cached = this
+                } else if (other.size === cached.size && other instanceof ReadonlyMemoizedSet) {
+                    cached = other
+                }
                 this[intersectionCache].set(other[memoizaionIdentifier], cached)
                 other[intersectionCache].set(this[memoizaionIdentifier], cached)
             }
@@ -45,3 +50,15 @@ export class MemoizedSet extends Set {
     }
 }
 
+/**
+ * @template T
+ * @extends MemoizedSet<T>
+ */
+class ReadonlyMemoizedSet extends MemoizedSet {
+    constructor(/** @type {ConstructorParameters<typeof MemoizedSet<T>>} */...args) {
+        super(...args)
+        this.add = this.delete = () => {
+            throw new Error("attempting to modify a readonly (derived) MemoizedSet")
+        }
+    }
+}
