@@ -4,7 +4,10 @@ import { Agent } from 'undici';
  * @import { ApiDocument,ApiDocumentMetadata,Document,EventMap,Tag } from "./types" 
  */
 
-export class API extends /** @type {typeof EventEmitter<EventMap>} */(EventEmitter) {
+/**
+ * @extends {EventEmitter<EventMap>}
+ */
+export class API extends EventEmitter {
   /** @type {string} */
   base
   /** @type {string} */
