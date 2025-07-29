@@ -149,6 +149,7 @@ export class TagFs {
     }
 
     addTag(/** @type {Tag} */ tag) {
+        this.removeTag(tag.id)
         this.debug('adding tag', tag)
         this.tagsByName.set(tag.name, tag)
         this.tagsById.set(tag.id, tag)
@@ -166,6 +167,7 @@ export class TagFs {
     }
 
     addFile(/** @type {File} */file) {
+        this.removeFile(file.id)
         this.debug('adding file', file)
         this.fileByDisplayName.set(file.displayName, file);
         this.fileById.set(file.id, file);
