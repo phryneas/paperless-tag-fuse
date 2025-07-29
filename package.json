@@ -10,7 +10,7 @@
   },
   "type": "module",
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "description": "",
   "dependencies": {
     "@cocalc/fuse-native": "^2.4.3",
