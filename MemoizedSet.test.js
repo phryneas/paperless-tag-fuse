@@ -61,3 +61,13 @@ test("intersecting a `MemoizedSet` with a similar `ReadonlyMemoizedSet` will res
     assert.strictEqual(intersection, setB.intersection(intersection))
     assert.strictEqual(intersection, setC.intersection(intersection))
 })
+
+test("memoizes difference, unidirectional", () => {
+    const setA = new MemoizedSet([1, 2])
+    const setB = new MemoizedSet([2, 3])
+    const difference = setA.difference(setB)
+    assert.deepStrictEqual([...difference], [1])
+    assert.strictEqual(difference, setA.difference(setB))
+    assert.notStrictEqual(difference, setB.difference(setA))
+    assert.deepStrictEqual([...setB.difference(setA)], [3])
+})

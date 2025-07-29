@@ -3,7 +3,7 @@ import Fuse from "@cocalc/fuse-native";
 import { format, join, parse, sep } from "node:path";
 import { constants } from "node:fs";
 import assert from "node:assert";
-import { MemoizedSet } from "./MemoizedSet";
+import { MemoizedSet, ReadonlyMemoizedSet } from "./MemoizedSet.js";
 /**
  * @import {EventEmitter} from 'node:events'
  * @import {EventMap, Tag, Document, File } from './types'
@@ -200,23 +200,26 @@ export class TagFs {
         }
     }
 
-
-
+    /** @returns {Set<File>} */
     filesIn(/** @type {Set<string>} */ tags) {
         let files = this.allFiles;
         for (const tag of tags) {
             const byTag = this.filesByTagName.get(tag)
-            if (!byTag) return []
+            if (!byTag) return emptySet
             files = files.intersection(byTag)
         }
-        return files.values().map(file => file.displayName)
+        return files
     }
 
     /** @type {Fuse.OPERATIONS['readdir']} */
     readdir = (path, cb) => {
         const tags = new Set(path.split(sep).filter((v) => !!v));
-        const unusedTags = this.tagNames.difference(tags);
-        return process.nextTick(cb, 0, [...unusedTags, ...this.filesIn(tags)]);
+        const files = this.filesIn(tags)
+        const fileNames = files.values().map(file => file.displayName)
+        const unusedTags = [...this.tagNames.difference(tags)].filter(
+            tag => this.filesByTagName.get(tag)?.intersection(files).size
+        );
+        return process.nextTick(cb, 0, [...unusedTags, ...fileNames]);
     }
     /** @type {Fuse.OPERATIONS['getattr']} */
     getattr = (path, cb) => {
@@ -250,3 +253,5 @@ export class TagFs {
         return process.nextTick(cb, Fuse.ENOENT);
     }
 };
+
+const emptySet = new ReadonlyMemoizedSet();
