@@ -53,12 +53,13 @@ export class Webhook {
         this.server.listen(port);
         console.log(`
 Listening on port ${port} for these webhooks:
-/document/added?id=<id>
-/document/modified?id=<id>
-/document/deleted?id=<id>
-/tag/added?id=<id>
-/tag/modified?id=<id>
-/tag/deleted?id=<id>
+/document/added
+/document/modified
+/document/deleted
+/tag/added
+/tag/modified
+/tag/deleted
+Webhooks should contain \`{doc_url}\` as body.
             `)
         process.once("SIGINT", () => {
             this.server.close()
